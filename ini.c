@@ -15,9 +15,7 @@
 
 #if 0
 #define DEBUG fprintf(stderr, "%d -> %d :: %s\n", __LINE__, ctx->state, ptr)
-#else
-#define DEBUG
-#endif
+#define INI_PRINT ini_print
 
 static void ini_print(__m256i d)
 {
@@ -58,9 +56,13 @@ static void ini_print(__m256i d)
     };
 
     for (int i = 0; i < sizeof(arr) / sizeof(*arr); i++) {
-        printf("[%d] = %d\n", i, arr[i]);
+        fprintf(stderr, "[%d] = '%c'\n", i, arr[i]);
     }
 }
+#else
+#define DEBUG
+#define INI_PRINT
+#endif
 
 static __m256i ini_load(const char *ptr, uint64_t len)
 {
@@ -113,10 +115,7 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
     int off = 0;
 
     for (;;) {
-        if (len == 0) {
-            printf("len\n");
-            return true;
-        }
+        if (len == 0) return true;
 
         __m256i d = ini_load(ptr, len);
 
@@ -171,11 +170,7 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
                 mask  &= ~(1 << at);
                 goto _ini_state_begin_line;
             default:
-                if (!isalpha(ptr[at])) {
-                    printf("expected key or section\n");
-                    return false;
-                }
-
+                if (!isalpha(ptr[at])) return false;
                 kb = &ptr[at];
                 goto _ini_state_in_key;
             }
@@ -288,32 +283,3 @@ bool ini_parse_string(const char *s, size_t l, ini_callback_t callback, void *us
     ctx.user = user;
     return ini_do(&ctx, s, l);
 }
-
-/*
-int cb(const char *s, size_t sl, const char *k, size_t kl, const char *v, size_t vl)
-{
-    return 1;
-    printf("[\"%.*s\"] \"%.*s\" = \"%.*s\"\n", sl, s, kl, k, vl, v);
-}
-
-int main()
-{
-    struct ini_state c;
-    c.callback = &cb;
-    c.state = ini_state_begin_line;
-
-#if 1
-    int fd = open("../../old/INI/test2.ini", O_RDONLY);
-
-    struct stat st;
-    fstat(fd, &st);
-
-    void *mem = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-
-    df_do(&c, mem, st.st_size);
-#else
-    const char *str = "[a]b=c\n";
-    df_do(&c, str, strlen(str));
-#endif
-}
-*/
