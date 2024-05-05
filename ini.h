@@ -16,6 +16,8 @@ struct ini_ctx {
         ini_state_in_key,
         ini_state_begin_value,
         ini_state_in_value,
+
+        ini_state_in_comment,
     } state;
 
     ini_callback_t callback;

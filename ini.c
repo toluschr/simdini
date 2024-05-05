@@ -83,7 +83,7 @@ static __m256i ini_load(const char *ptr, uint64_t len)
 
     for (uint64_t i = len % 16; i > 0; i--) {
         a = _mm_slli_si128(a, 1);
-        a = _mm_insert_epi8(a, ptr[(len / 16) + (i - 1)], 0);
+        a = _mm_insert_epi8(a, ptr[16 * (len / 16) + (i - 1)], 0);
     }
 
     if (len >= 16) {
@@ -118,32 +118,23 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
         if (len == 0) return true;
 
         __m256i d = ini_load(ptr, len);
+        __m256i eq_non_space = _mm256_cmpeq_epi8(d, space);
+        __m256i eq_lsb = _mm256_cmpeq_epi8(d, left_square_bracket);
+        __m256i eq_rsb = _mm256_cmpeq_epi8(d, right_square_bracket);
+        __m256i eq_equal = _mm256_cmpeq_epi8(d, equal);
+        __m256i eq_line_feed = _mm256_cmpeq_epi8(d, line_feed);
+        __m256i eq_hashtag = _mm256_cmpeq_epi8(d, hashtag);
 
-        __m256i eq0 = _mm256_cmpeq_epi8(d, space);
-        eq0 = _mm256_xor_si256(eq0, inv);
+        int mask_non_space = ~_mm256_movemask_epi8(eq_non_space);
 
-        int mask0 = _mm256_movemask_epi8(eq0);
-
-        __m256i eq1 = _mm256_cmpeq_epi8(d, left_square_bracket);
-        __m256i eq2 = _mm256_cmpeq_epi8(d, right_square_bracket);
-
-        int mask_lsb = _mm256_movemask_epi8(eq1);
-        int mask_rsb = _mm256_movemask_epi8(eq2);
-        eq0 = _mm256_or_si256(eq1, eq2);
-
-        __m256i eq3 = _mm256_cmpeq_epi8(d, equal);
-        __m256i eq4 = _mm256_cmpeq_epi8(d, line_feed);
-        eq1 = _mm256_or_si256(eq3, eq4);
-
-        __m256i eq5 = _mm256_cmpeq_epi8(d, hashtag);
-        eq0 = _mm256_or_si256(eq0, eq1);
-
-        eq0 = _mm256_or_si256(eq0, eq5);
-
-        int mask = _mm256_movemask_epi8(eq0);
+        int mask_lsb = _mm256_movemask_epi8(eq_lsb);
+        int mask_rsb = _mm256_movemask_epi8(eq_rsb);
+        int mask_equal = _mm256_movemask_epi8(eq_equal);
+        int mask_line_feed = _mm256_movemask_epi8(eq_line_feed);
+        int mask_hashtag = _mm256_movemask_epi8(eq_hashtag);
 
         // short circuit, skip all spaces
-        if (mask0 == 0) {
+        if (mask_non_space == 0) {
             ptr += (len < 16) ? len : 16;
             len -= (len < 16) ? len : 16;
             continue;
@@ -158,17 +149,24 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
         _ini_state_begin_line: ctx->state = ini_state_begin_line;
         case ini_state_begin_line:
             DEBUG;
-            at = __builtin_ctz(mask | mask0);
+            at = __builtin_ctz(mask_non_space);
 
             switch (ptr[at]) {
             case '[':
-                mask0 &= ~((1 << (at + 1)) - 1);
-                mask  &= ~(1 << at);
+                mask_non_space &= ~((2 << at) - 1);
+                mask_lsb &= mask_non_space;
                 goto _ini_state_begin_section;
             case '\n':
-                mask0 &= ~((1 << (at + 1)) - 1);
-                mask  &= ~(1 << at);
+                mask_non_space &= ~((2 << at) - 1);
+                mask_line_feed &= mask_non_space;
                 goto _ini_state_begin_line;
+            case '#':
+                mask_non_space &= ~((2 << at) - 1);
+                mask_hashtag &= mask_non_space;
+                goto _ini_state_in_comment;
+            // hack
+            case '\0':
+                return true;
             default:
                 if (!isalpha(ptr[at])) return false;
                 kb = &ptr[at];
@@ -179,98 +177,95 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
         _ini_state_begin_section: ctx->state = ini_state_begin_section;
         case ini_state_begin_section:
             DEBUG;
-            at = __builtin_ctz(mask | mask0);
+            at = __builtin_ctz(mask_non_space);
             sb = ptr + at;
             goto _ini_state_in_section;
         _ini_state_in_section: ctx->state = ini_state_in_section;
         case ini_state_in_section:
             DEBUG;
-            tmp = mask0 & ((mask | (mask - 1)) ^ mask);
+            tmp = mask_non_space & ((mask_rsb | (mask_rsb - 1)) ^ mask_rsb);
 
             at = (8*sizeof(tmp)) - __builtin_clz(tmp);
             se = &ptr[at];
 
-            // no control char
-            if (mask == 0) {
+            if (mask_rsb == 0) {
                 ptr += (len < 16) ? len : 16;
                 len -= (len < 16) ? len : 16;
                 continue;
             }
 
-            at = __builtin_ctz(mask);
+            at = __builtin_ctz(mask_rsb);
 
-            if (ptr[at] != ']') {
-                printf("invalid\n");
-                return false;
-            }
-
-            mask0 &= ~((1 << (at + 1)) - 1);
-            mask &= ~(1 << at);
+            mask_non_space &= ~((2 << at) - 1);
+            mask_rsb &= mask_non_space;
             goto _ini_state_begin_line;
         _ini_state_in_key: ctx->state = ini_state_in_key;
         case ini_state_in_key:
             DEBUG;
             // get everything before first punctuator
-            tmp = mask0 & ((mask | (mask - 1)) ^ mask);
+            tmp = mask_non_space & ((mask_equal | (mask_equal - 1)) ^ mask_equal);
 
             at = (8*sizeof(tmp)) - __builtin_clz(tmp);
             ke = &ptr[at];
 
-            if (mask == 0) {
+            if (mask_equal == 0) {
                 ptr += (len < 16) ? len : 16;
                 len -= (len < 16) ? len : 16;
                 continue;
             }
 
-            at = __builtin_ctz(mask);
+            at = __builtin_ctz(mask_equal);
 
-            if (ptr[at] != '=') {
-                ptr += at + 1;
-                len -= at + 1;
-                // mask0 &= ~((1 << (at + 1)) - 1);
-                // mask &= ~((1 << (at + 1)) - 1);
-                continue;
-            }
-
-            mask0 &= ~((1 << (at + 1)) - 1);
-            mask &= ~((1 << (at + 1)) - 1);
+            mask_non_space &= ~((2 << at) - 1);
+            mask_equal &= mask_non_space;
             goto _ini_state_begin_value;
         _ini_state_begin_value: ctx->state = ini_state_begin_value;
         case ini_state_begin_value:
             DEBUG;
-            at = __builtin_ctz(mask0);
+            at = __builtin_ctz(mask_non_space);
             vb = &ptr[at];
             goto _ini_state_in_value;
         _ini_state_in_value: ctx->state = ini_state_in_value;
         case ini_state_in_value:
             DEBUG;
-            tmp = mask0 & ((mask | (mask - 1)) ^ mask);
+            tmp = mask_non_space & ((mask_line_feed | (mask_line_feed - 1)) ^ mask_line_feed);
 
-            at = (8*sizeof(tmp)) - __builtin_clz(tmp);
-            ve = &ptr[at];
+            if (tmp != 0) {
+                at = (8*sizeof(tmp)) - __builtin_clz(tmp);
+                ve = &ptr[at];
+            } else {
+                ve = vb;
+            }
 
-            if (mask == 0) {
+            if (mask_line_feed == 0) {
                 ptr += (len < 16) ? len : 16;
                 len -= (len < 16) ? len : 16;
                 continue;
             }
 
-            at = __builtin_ctz(mask);
+            ctx->callback(sb, se - sb,
+                          kb, ke - kb,
+                          vb, ve - vb,
+                          ctx->user);
 
-            if (ptr[at] == '\n') {
-                ctx->callback(sb, se - sb,
-                              kb, ke - kb,
-                              vb, ve - vb,
-                              ctx->user);
+            ctx->state = ini_state_begin_line;
 
-                ctx->state = ini_state_begin_line;
-                ptr += at + 1;
-                len -= at + 1;
+            at = __builtin_ctz(mask_line_feed);
+            ptr += at + 1;
+            len -= at + 1;
+            continue;
+        _ini_state_in_comment: ctx->state = ini_state_in_comment;
+        case ini_state_in_comment:
+            if (mask_line_feed == 0) {
+                ptr += (len < 16) ? len : 16;
+                len += (len < 16) ? len : 16;
                 continue;
             }
 
-            // printf("error in file: %s\n", &ptr[at]);
-            return false;
+            at = __builtin_ctz(mask_line_feed);
+            mask_non_space &= ~((2 << at) - 1);
+            mask_line_feed &= mask_non_space;
+            goto _ini_state_begin_line;
         }
     }
 }
