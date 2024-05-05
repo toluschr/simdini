@@ -13,6 +13,8 @@
 
 #include "ini.h"
 
+#define fallthrough __attribute__((fallthrough))
+
 #if 0
 #define DEBUG fprintf(stderr, "%d -> %d :: %s\n", __LINE__, ctx->state, ptr)
 #define INI_PRINT ini_print
@@ -66,7 +68,7 @@ static void ini_print(__m256i d)
 
 static __m256i ini_load(const char *ptr, uint64_t len)
 {
-    __m256i out;
+    __m256i out; // uninit safe: only the ignored half is uninitialized
     __m128i a;
 
     if (len >= 32) {
@@ -99,9 +101,9 @@ static __m256i ini_load(const char *ptr, uint64_t len)
 
 static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
 {
-    __m256i inv = _mm256_set1_epi8(0xff);
+    // __m256i inv = _mm256_set1_epi8(0xff);
     __m256i space = _mm256_set1_epi8(' ');
-    __m256i tab = _mm256_set1_epi8('\t');
+    // __m256i tab = _mm256_set1_epi8('\t');
     __m256i line_feed = _mm256_set1_epi8('\n');
     __m256i left_square_bracket = _mm256_set1_epi8('[');
     __m256i right_square_bracket = _mm256_set1_epi8(']');
@@ -112,7 +114,7 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
     const char *ke, *kb = NULL;
     const char *ve, *vb = NULL;
 
-    int off = 0;
+    // int off = 0;
 
     for (;;) {
         if (len == 0) return true;
@@ -140,13 +142,13 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             continue;
         }
 
-        int mmask = 0xffffffff;
+        // int mmask = 0xffffffff;
 
         // all spaces, skip
         switch (ctx->state) {
         int at, tmp;
 
-        _ini_state_begin_line: ctx->state = ini_state_begin_line;
+        _ini_state_begin_line: ctx->state = ini_state_begin_line; fallthrough;
         case ini_state_begin_line:
             DEBUG;
             at = __builtin_ctz(mask_non_space);
@@ -174,13 +176,13 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             }
 
             break;
-        _ini_state_begin_section: ctx->state = ini_state_begin_section;
+        _ini_state_begin_section: ctx->state = ini_state_begin_section; fallthrough;
         case ini_state_begin_section:
             DEBUG;
             at = __builtin_ctz(mask_non_space);
             sb = ptr + at;
             goto _ini_state_in_section;
-        _ini_state_in_section: ctx->state = ini_state_in_section;
+        _ini_state_in_section: ctx->state = ini_state_in_section; fallthrough;
         case ini_state_in_section:
             DEBUG;
             tmp = mask_non_space & ((mask_rsb | (mask_rsb - 1)) ^ mask_rsb);
@@ -199,7 +201,7 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             mask_non_space &= ~((2 << at) - 1);
             mask_rsb &= mask_non_space;
             goto _ini_state_begin_line;
-        _ini_state_in_key: ctx->state = ini_state_in_key;
+        _ini_state_in_key: ctx->state = ini_state_in_key; fallthrough;
         case ini_state_in_key:
             DEBUG;
             // get everything before first punctuator
@@ -219,13 +221,13 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             mask_non_space &= ~((2 << at) - 1);
             mask_equal &= mask_non_space;
             goto _ini_state_begin_value;
-        _ini_state_begin_value: ctx->state = ini_state_begin_value;
+        _ini_state_begin_value: ctx->state = ini_state_begin_value; fallthrough;
         case ini_state_begin_value:
             DEBUG;
             at = __builtin_ctz(mask_non_space);
             vb = &ptr[at];
             goto _ini_state_in_value;
-        _ini_state_in_value: ctx->state = ini_state_in_value;
+        _ini_state_in_value: ctx->state = ini_state_in_value; fallthrough;
         case ini_state_in_value:
             DEBUG;
             tmp = mask_non_space & ((mask_line_feed | (mask_line_feed - 1)) ^ mask_line_feed);
@@ -243,7 +245,7 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
                 continue;
             }
 
-            ctx->callback(sb, se - sb,
+            ctx->callback(sb, se - sb, // uninit safe: deferred to callback
                           kb, ke - kb,
                           vb, ve - vb,
                           ctx->user);
@@ -254,7 +256,7 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             ptr += at + 1;
             len -= at + 1;
             continue;
-        _ini_state_in_comment: ctx->state = ini_state_in_comment;
+        _ini_state_in_comment: ctx->state = ini_state_in_comment; fallthrough;
         case ini_state_in_comment:
             if (mask_line_feed == 0) {
                 ptr += (len < 16) ? len : 16;

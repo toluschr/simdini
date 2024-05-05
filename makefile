@@ -1,6 +1,7 @@
 CC := gcc
 
-CFLAGS := -O3 -g0
+CFLAGS := -O3 -g0 -Werror -Wall -Wextra
+CFLAGS += -Wno-error=maybe-uninitialized
 CFLAGS += -MMD
 CFLAGS += -march=native
 CFLAGS += -mtune=native
