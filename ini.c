@@ -289,12 +289,11 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
                           vb, ve - vb,
                           ctx->user);
 
-            ctx->state = ini_state_begin_line;
-
             at = __builtin_ctz(mask_line_feed);
-            ptr += at + 1;
-            len -= at + 1;
-            continue;
+
+            mask_non_space &= ~((2 << at) - 1);
+            mask_line_feed &= mask_non_space;
+            goto _ini_state_begin_line;
         _ini_state_in_comment: ctx->state = ini_state_in_comment; fallthrough;
         case ini_state_in_comment:
             DEBUG(d, mask_line_feed);
