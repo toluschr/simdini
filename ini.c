@@ -15,13 +15,16 @@
 
 #define fallthrough __attribute__((fallthrough))
 
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#define likely(x) __builtin_expect(!!(x), 1)
+
 #if 0
 #define DEBUG(...) { \
         fprintf(stderr, "%s:%d -> %s:\n", __FILE__, __LINE__, __ini_str_state(ctx->state)); \
         __ini_print(__VA_ARGS__); \
     }
 
-extern const char *__ini_str_state(int s)
+static const char *__ini_str_state(int s)
 {
     switch (s) {
     case ini_state_begin_line: return "begin_line";
@@ -35,7 +38,7 @@ extern const char *__ini_str_state(int s)
     }
 }
 
-extern void __ini_print(__m256i d, uint32_t arrow)
+static void __ini_print(__m256i d, uint32_t arrow)
 {
     int arr[32] = {
         _mm256_extract_epi8(d,  0),
@@ -138,58 +141,52 @@ static __m256i ini_load(const char *ptr, uint64_t len)
 
 static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
 {
-    // __m256i inv = _mm256_set1_epi8(0xff);
     __m256i space = _mm256_set1_epi8(' ');
-    // __m256i tab = _mm256_set1_epi8('\t');
     __m256i line_feed = _mm256_set1_epi8('\n');
-    // __m256i left_square_bracket = _mm256_set1_epi8('[');
     __m256i right_square_bracket = _mm256_set1_epi8(']');
-    // __m256i hashtag = _mm256_set1_epi8('#');
     __m256i equal = _mm256_set1_epi8('=');
 
     const char *se = NULL, *sb = NULL;
     const char *ke = NULL, *kb = NULL;
     const char *ve = NULL, *vb = NULL;
 
-    // int off = 0;
+    const char *np = ptr;
+    size_t nl = len;
 
     for (;;) {
-        if (len == 0) return true;
+        __m256i d = ini_load(np, nl);
 
-        __m256i d = ini_load(ptr, len);
+        ptr = np;
+        len = nl;
+
+        np += (nl < 32) ? nl : 32;
+        nl -= (nl < 32) ? nl : 32;
+
         __m256i eq_non_space = _mm256_cmpeq_epi8(d, space);
-        // __m256i eq_lsb = _mm256_cmpeq_epi8(d, left_square_bracket);
         __m256i eq_rsb = _mm256_cmpeq_epi8(d, right_square_bracket);
         __m256i eq_equal = _mm256_cmpeq_epi8(d, equal);
         __m256i eq_line_feed = _mm256_cmpeq_epi8(d, line_feed);
-        // __m256i eq_hashtag = _mm256_cmpeq_epi8(d, hashtag);
 
         int mask_non_space = ~_mm256_movemask_epi8(eq_non_space);
-
-        // int mask_lsb = _mm256_movemask_epi8(eq_lsb);
         int mask_rsb = _mm256_movemask_epi8(eq_rsb);
         int mask_equal = _mm256_movemask_epi8(eq_equal);
         int mask_line_feed = _mm256_movemask_epi8(eq_line_feed);
-        // int mask_hashtag = _mm256_movemask_epi8(eq_hashtag);
 
         switch (ctx->state) {
         int at, tmp;
 
         _ini_state_begin_line: ctx->state = ini_state_begin_line; fallthrough;
         case ini_state_begin_line:
-            if (mask_non_space == 0) {
-                ptr += (len < 32) ? len : 32;
-                len -= (len < 32) ? len : 32;
-                continue;
-            }
+            if (len == 0) return true;
 
-            at = __builtin_ctz(mask_non_space);
             DEBUG(d, mask_non_space);
 
+            if (mask_non_space == 0) continue;
+
+            at = __builtin_ctz(mask_non_space);
             switch (ptr[at]) {
             case '[':
                 mask_non_space &= ~((2 << at) - 1);
-                // mask_lsb &= mask_non_space;
                 goto _ini_state_begin_section;
             case '\n':
                 mask_non_space &= ~((2 << at) - 1);
@@ -197,28 +194,26 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
                 goto _ini_state_begin_line;
             case '#':
                 mask_non_space &= ~((2 << at) - 1);
-                // mask_hashtag &= mask_non_space;
                 goto _ini_state_in_comment;
             // hack
             case '\0':
                 return true;
             default:
-                if (!isalpha(ptr[at])) return false;
+                if (!isalpha(ptr[at])) {
+                    return false;
+                }
+
                 kb = &ptr[at];
                 ke = kb;
                 goto _ini_state_in_key;
             }
-
             break;
         _ini_state_begin_section: ctx->state = ini_state_begin_section; fallthrough;
         case ini_state_begin_section:
             DEBUG(d, mask_non_space);
 
-            if (mask_non_space == 0) {
-                ptr += (len < 32) ? len : 32;
-                len -= (len < 32) ? len : 32;
-                continue;
-            }
+            if (len == 0) return true;
+            if (mask_non_space == 0) continue;
 
             at = __builtin_ctz(mask_non_space);
             sb = &ptr[at];
@@ -226,6 +221,8 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             goto _ini_state_in_section;
         _ini_state_in_section: ctx->state = ini_state_in_section; fallthrough;
         case ini_state_in_section:
+            if (len == 0) return true;
+
             tmp = mask_non_space & ((mask_rsb | (mask_rsb - 1)) ^ mask_rsb);
             DEBUG(d, tmp);
 
@@ -234,11 +231,7 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
                 se = &ptr[at];
             }
 
-            if (mask_rsb == 0) {
-                ptr += (len < 32) ? len : 32;
-                len -= (len < 32) ? len : 32;
-                continue;
-            }
+            if (mask_rsb == 0) continue;
 
             at = __builtin_ctz(mask_rsb);
             mask_non_space &= ~((2 << at) - 1);
@@ -246,6 +239,8 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             goto _ini_state_begin_line;
         _ini_state_in_key: ctx->state = ini_state_in_key; fallthrough;
         case ini_state_in_key:
+            if (len == 0) return true;
+
             tmp = mask_non_space & ((mask_equal | (mask_equal - 1)) ^ mask_equal);
             DEBUG(d, tmp);
 
@@ -254,26 +249,19 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
                 ke = &ptr[at];
             }
 
-            if (mask_equal == 0) {
-                ptr += (len < 32) ? len : 32;
-                len -= (len < 32) ? len : 32;
-                continue;
-            }
+            if (mask_equal == 0) continue;
 
             at = __builtin_ctz(mask_equal);
-
             mask_non_space &= ~((2 << at) - 1);
             mask_equal &= mask_non_space;
             goto _ini_state_begin_value;
         _ini_state_begin_value: ctx->state = ini_state_begin_value; fallthrough;
         case ini_state_begin_value:
+            if (len == 0) return true;
+
             DEBUG(d, mask_non_space);
 
-            if (mask_non_space == 0) {
-                ptr += (len < 32) ? len : 32;
-                len -= (len < 32) ? len : 32;
-                continue;
-            }
+            if (mask_non_space == 0) continue;
 
             at = __builtin_ctz(mask_non_space);
             vb = &ptr[at];
@@ -281,6 +269,11 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             goto _ini_state_in_value;
         _ini_state_in_value: ctx->state = ini_state_in_value; fallthrough;
         case ini_state_in_value:
+            if (len == 0) {
+                ctx->callback(sb, se - sb, kb, ke - kb, vb, &ptr[len] - vb, ctx->user);
+                return true;
+            }
+
             tmp = mask_non_space & ((mask_line_feed | (mask_line_feed - 1)) ^ mask_line_feed);
             DEBUG(d, tmp);
 
@@ -289,31 +282,21 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
                 ve = &ptr[at];
             }
 
-            if (mask_line_feed == 0) {
-                ptr += (len < 32) ? len : 32;
-                len -= (len < 32) ? len : 32;
-                continue;
-            }
+            if (mask_line_feed == 0) continue;
 
-            ctx->callback(sb, se - sb, // uninit safe: deferred to callback
-                          kb, ke - kb,
-                          vb, ve - vb,
-                          ctx->user);
+            ctx->callback(sb, se - sb, kb, ke - kb, vb, ve - vb, ctx->user);
 
             at = __builtin_ctz(mask_line_feed);
-
             mask_non_space &= ~((2 << at) - 1);
             mask_line_feed &= mask_non_space;
             goto _ini_state_begin_line;
         _ini_state_in_comment: ctx->state = ini_state_in_comment; fallthrough;
         case ini_state_in_comment:
+            if (len == 0) return true;
+
             DEBUG(d, mask_line_feed);
 
-            if (mask_line_feed == 0) {
-                ptr += (len < 32) ? len : 32;
-                len += (len < 32) ? len : 32;
-                continue;
-            }
+            if (mask_line_feed == 0) continue;
 
             at = __builtin_ctz(mask_line_feed);
             mask_non_space &= ~((2 << at) - 1);
