@@ -9,7 +9,7 @@ CFLAGS += -mtune=native
 obj = ini.o
 dep = $(obj:%.o=%.d)
 
-.PHONY: all
+.PHONY: all, clean
 all: ini.o
 
 clean:
