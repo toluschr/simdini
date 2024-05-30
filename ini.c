@@ -40,7 +40,7 @@ static const char *__ini_str_state(int s)
 
 static void __ini_print(__m256i d, uint32_t arrow)
 {
-    int arr[32] = {
+    uint32_t arr[32] = {
         _mm256_extract_epi8(d,  0),
         _mm256_extract_epi8(d,  1),
         _mm256_extract_epi8(d,  2),
@@ -163,15 +163,15 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
         __m256i eq_equal = _mm256_cmpeq_epi8(d, equal);
         __m256i eq_line_feed = _mm256_cmpeq_epi8(d, line_feed);
 
-        int mask_non_space = ~_mm256_movemask_epi8(eq_non_space);
-        int mask_rsb = _mm256_movemask_epi8(eq_rsb);
-        int mask_equal = _mm256_movemask_epi8(eq_equal);
-        int mask_line_feed = _mm256_movemask_epi8(eq_line_feed);
+        uint32_t mask_non_space = ~_mm256_movemask_epi8(eq_non_space);
+        uint32_t mask_rsb = _mm256_movemask_epi8(eq_rsb);
+        uint32_t mask_equal = _mm256_movemask_epi8(eq_equal);
+        uint32_t mask_line_feed = _mm256_movemask_epi8(eq_line_feed);
 
         mask_non_space &= ((uint32_t)-1) ^ ((((uint32_t)(1 << len) - 1) ^ ((uint32_t)-1)) * (len < 32));
 
         switch (ctx->state) {
-            int at, tmp;
+            uint32_t at, tmp;
 
         _ini_state_begin_line: ctx->state = ini_state_begin_line; fallthrough;
         case ini_state_begin_line:
