@@ -31,6 +31,9 @@ struct ini_ctx {
     const char *vb;
     const char *ve;
 
+    const char *ptr;
+    size_t len;
+
     void *user;
 };
 
