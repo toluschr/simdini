@@ -146,10 +146,6 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
     __m256i right_square_bracket = _mm256_set1_epi8(']');
     __m256i equal = _mm256_set1_epi8('=');
 
-    const char *se = NULL, *sb = NULL;
-    const char *ke = NULL, *kb = NULL;
-    const char *ve = NULL, *vb = NULL;
-
     const char *np = ptr;
     size_t nl = len;
 
@@ -171,6 +167,9 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
         int mask_rsb = _mm256_movemask_epi8(eq_rsb);
         int mask_equal = _mm256_movemask_epi8(eq_equal);
         int mask_line_feed = _mm256_movemask_epi8(eq_line_feed);
+
+        if (len < 32)
+            mask_non_space &= (uint32_t)(1 << len) - 1;
 
         switch (ctx->state) {
         int at, tmp;
@@ -195,40 +194,37 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             case '#':
                 mask_non_space &= ~((2 << at) - 1);
                 goto _ini_state_in_comment;
-            // hack
-            case '\0':
-                return true;
             default:
                 if (!isalpha(ptr[at])) {
                     return false;
                 }
 
-                kb = &ptr[at];
-                ke = kb;
+                ctx->kb = &ptr[at];
+                ctx->ke = &ptr[at];
                 goto _ini_state_in_key;
             }
             break;
         _ini_state_begin_section: ctx->state = ini_state_begin_section; fallthrough;
         case ini_state_begin_section:
-            if (len == 0) return false;
+            if (len == 0) return true;
 
             DEBUG(d, mask_non_space);
             if (mask_non_space == 0) continue;
 
             at = __builtin_ctz(mask_non_space);
-            sb = &ptr[at];
-            se = sb;
+            ctx->sb = &ptr[at];
+            ctx->se = &ptr[at];
             goto _ini_state_in_section;
         _ini_state_in_section: ctx->state = ini_state_in_section; fallthrough;
         case ini_state_in_section:
-            if (len == 0) return false;
+            if (len == 0) return true;
 
             tmp = mask_non_space & ((mask_rsb | (mask_rsb - 1)) ^ mask_rsb);
             DEBUG(d, tmp);
 
             if (tmp != 0) {
                 at = (8*sizeof(tmp)) - __builtin_clz(tmp);
-                se = &ptr[at];
+                ctx->se = &ptr[at];
             }
 
             if (mask_rsb == 0) continue;
@@ -246,7 +242,7 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
 
             if (tmp != 0) {
                 at = (8*sizeof(tmp)) - __builtin_clz(tmp);
-                ke = &ptr[at];
+                ctx->ke = &ptr[at];
             }
 
             if (mask_equal == 0) continue;
@@ -264,27 +260,24 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             if (mask_non_space == 0) continue;
 
             at = __builtin_ctz(mask_non_space);
-            vb = &ptr[at];
-            ve = vb;
+            ctx->vb = &ptr[at];
+            ctx->ve = &ptr[at];
             goto _ini_state_in_value;
         _ini_state_in_value: ctx->state = ini_state_in_value; fallthrough;
         case ini_state_in_value:
-            if (len == 0) {
-                ctx->callback(sb, se - sb, kb, ke - kb, vb, &ptr[len] - vb, ctx->user);
-                return true;
-            }
+            if (len == 0) return true;
 
             tmp = mask_non_space & ((mask_line_feed | (mask_line_feed - 1)) ^ mask_line_feed);
             DEBUG(d, tmp);
 
             if (tmp != 0) {
                 at = (8*sizeof(tmp)) - __builtin_clz(tmp);
-                ve = &ptr[at];
+                ctx->ve = &ptr[at];
             }
 
             if (mask_line_feed == 0) continue;
 
-            ctx->callback(sb, se - sb, kb, ke - kb, vb, ve - vb, ctx->user);
+            ctx->callback(ctx->sb, ctx->se - ctx->sb, ctx->kb, ctx->ke - ctx->kb, ctx->vb, ctx->ve - ctx->vb, ctx->user);
 
             at = __builtin_ctz(mask_line_feed);
             mask_non_space &= ~((2 << at) - 1);
@@ -312,5 +305,28 @@ bool ini_parse_string(const char *s, size_t l, ini_callback_t callback, void *us
     ctx.state = ini_state_begin_line;
     ctx.callback = callback;
     ctx.user = user;
-    return ini_do(&ctx, s, l);
+    ctx.sb = NULL;
+    ctx.se = NULL;
+    ctx.kb = NULL;
+    ctx.ke = NULL;
+    ctx.vb = NULL;
+    ctx.ve = NULL;
+
+    bool out = ini_do(&ctx, s, l);
+    if (out == false) return out;
+
+    switch (ctx.state) {
+    case ini_state_begin_value:
+        ctx.callback(ctx.sb, ctx.se - ctx.sb, ctx.kb, ctx.ke - ctx.kb, "", 0, ctx.user);
+        return true;
+    case ini_state_in_value:
+        ctx.callback(ctx.sb, ctx.se - ctx.sb, ctx.kb, ctx.ke - ctx.kb, ctx.vb, ctx.ve - ctx.vb, ctx.user);
+        return true;
+    case ini_state_begin_line:
+        return true;
+    default:
+        return false;
+    }
+
+    return out;
 }

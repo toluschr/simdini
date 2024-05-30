@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -175,6 +176,15 @@ static struct ini_test ini_value_at_32byte_boundary = {
     }
 };
 
+static struct ini_test ini_spaces_after_last_value_no_newline_at_eof = {
+    "[]\na=b    ",
+    true,
+    {
+        {"", "a", "b"},
+        {NULL, NULL, NULL}
+    }
+};
+
 typedef struct {
     const char *name;
     struct ini_test *test;
@@ -201,14 +211,49 @@ ini_testsuite all_tests = {
     TEST(ini_overlong_names),
     TEST(ini_key_at_32byte_boundary),
     TEST(ini_value_at_32byte_boundary),
+    TEST(ini_spaces_after_last_value_no_newline_at_eof),
     {NULL, NULL},
 };
 
 static bool ok;
+static int npr = 0;
+
+static int debug_printline(const char *fmt, ...)
+{
+    va_list va;
+    va_start(va, fmt);
+    int n = vsnprintf(NULL, 0, fmt, va);
+    va_end(va);
+
+    if (n < 0) {
+        return n;
+    }
+
+    char *buf = alloca(sizeof(*buf) * (n + 1));
+
+    va_start(va, fmt);
+    n = vsnprintf(buf, n + 1, fmt, va);
+    va_end(va);
+
+    if (n < 0) {
+        return n;
+    }
+
+    fputs("   ", stderr);
+    fputs(buf, stderr);
+    fputs("\n", stderr);
+
+    npr++;
+    return n;
+}
 
 static int check_callback(const char *s, size_t sl, const char *k, size_t kl, const char *v, size_t vl, void *user) {
     (void)(user);
     const char *(**expect)[3] = user;
+
+    if (!s) sl = 0;
+    if (!k) kl = 0;
+    if (!v) vl = 0;
 
     const char *es = (**expect)[0];
     const char *ek = (**expect)[1];
@@ -221,7 +266,7 @@ static int check_callback(const char *s, size_t sl, const char *k, size_t kl, co
     // end marker
     if (es == NULL && ek == NULL && ev == NULL) {
         ok = false;
-        // fprintf(stderr, "Additional data\n");
+        debug_printline("Additional Data: [%.*s] %.*s = %.*s", (int)sl, s, (int)kl, k, (int)vl, v);
         return 1;
     }
 
@@ -229,9 +274,21 @@ static int check_callback(const char *s, size_t sl, const char *k, size_t kl, co
     size_t ekl = strlen(ek);
     size_t evl = strlen(ev);
 
-    ok &= (esl == sl && memcmp(s, es, esl) == 0);
-    ok &= (ekl == kl && memcmp(k, ek, ekl) == 0);
-    ok &= (evl == vl && memcmp(v, ev, evl) == 0);
+    if (!(esl == sl && memcmp(s, es, esl) == 0)) {
+        debug_printline("Section invalid: '%.*s' != '%.*s'", (int)sl, s, (int)esl, s);
+        ok = false;
+    }
+
+    if (!(ekl == kl && memcmp(k, ek, ekl) == 0)) {
+        debug_printline("Key invalid: '%.*s' != '%.*s'", (int)kl, k, (int)ekl, k);
+        ok = false;
+    }
+
+    if (!(evl == vl && memcmp(v, ev, evl) == 0)) {
+        debug_printline("Value invalid: '%.*s' != '%.*s'", (int)vl, v, (int)evl, v);
+        ok = false;
+    }
+
 
     (*expect)++;
     return 1;
@@ -255,23 +312,26 @@ int main(int argc, char **argv)
     case 1:
         for (int i = 0; all_tests[i].name != NULL; i++) {
             ok = true;
+            npr = 1;
 
-            fprintf(stderr, "[    ] %s\r", all_tests[i].name);
+            fprintf(stderr, "  %s\n", all_tests[i].name);
             const char *(*check_data)[3] = all_tests[i].test->expect;
             if (ini_parse_string(all_tests[i].test->string, strlen(all_tests[i].test->string), &check_callback, &check_data) != all_tests[i].test->rc) {
                 ok = false;
-                // fprintf(stderr, "Unexpected return value\n");
+                debug_printline("Unexpected return value");
             }
 
             if ((*check_data)[0] != NULL || (*check_data)[1] != NULL || (*check_data)[2] != NULL) {
-                // fprintf(stderr, "Unexpected end of file\n");
+                debug_printline("Unexpected end of file");
                 ok = false;
             }
 
             if (ok) {
-                fprintf(stderr, "\033[32;1m✔\033[0m %s\033[K\n", all_tests[i].name);
+                fprintf(stderr, "\033[%dA\r\033[32;1m✔\033[0m %s\033[K\033[%dB\r", npr, all_tests[i].name, npr);
+                // fprintf(stderr, "\r\033[32;1m✔\033[0m %s\033[K\n", all_tests[i].name);
             } else {
-                fprintf(stderr, "\033[31;1m✘\033[0m %s\033[K\n", all_tests[i].name);
+                fprintf(stderr, "\033[%dA\r\033[31;1m✘\033[0m %s\033[K\033[%dB\r", npr, all_tests[i].name, npr);
+                // fprintf(stderr, "\r\033[31;1m✘\033[0m %s\033[K\n", all_tests[i].name);
                 rc = EXIT_FAILURE;
             }
         }

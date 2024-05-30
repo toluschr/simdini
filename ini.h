@@ -21,6 +21,16 @@ struct ini_ctx {
     } state;
 
     ini_callback_t callback;
+
+    const char *sb;
+    const char *se;
+
+    const char *kb;
+    const char *ke;
+
+    const char *vb;
+    const char *ve;
+
     void *user;
 };
 
