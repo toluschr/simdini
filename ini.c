@@ -155,8 +155,8 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
         ptr = np;
         len = nl;
 
-        np += (nl < 32) ? nl : 32;
-        nl -= (nl < 32) ? nl : 32;
+        np += 32 ^ ((nl ^ 32) * (nl < 32));
+        nl -= 32 ^ ((nl ^ 32) * (nl < 32));
 
         __m256i eq_non_space = _mm256_cmpeq_epi8(d, space);
         __m256i eq_rsb = _mm256_cmpeq_epi8(d, right_square_bracket);
@@ -168,11 +168,10 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
         int mask_equal = _mm256_movemask_epi8(eq_equal);
         int mask_line_feed = _mm256_movemask_epi8(eq_line_feed);
 
-        if (len < 32)
-            mask_non_space &= (uint32_t)(1 << len) - 1;
+        mask_non_space &= ((uint32_t)-1) ^ ((((uint32_t)(1 << len) - 1) ^ ((uint32_t)-1)) * (len < 32));
 
         switch (ctx->state) {
-        int at, tmp;
+            int at, tmp;
 
         _ini_state_begin_line: ctx->state = ini_state_begin_line; fallthrough;
         case ini_state_begin_line:
