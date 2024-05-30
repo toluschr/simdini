@@ -210,9 +210,9 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             break;
         _ini_state_begin_section: ctx->state = ini_state_begin_section; fallthrough;
         case ini_state_begin_section:
-            DEBUG(d, mask_non_space);
+            if (len == 0) return false;
 
-            if (len == 0) return true;
+            DEBUG(d, mask_non_space);
             if (mask_non_space == 0) continue;
 
             at = __builtin_ctz(mask_non_space);
@@ -221,7 +221,7 @@ static bool ini_do(struct ini_ctx *ctx, const char *ptr, size_t len)
             goto _ini_state_in_section;
         _ini_state_in_section: ctx->state = ini_state_in_section; fallthrough;
         case ini_state_in_section:
-            if (len == 0) return true;
+            if (len == 0) return false;
 
             tmp = mask_non_space & ((mask_rsb | (mask_rsb - 1)) ^ mask_rsb);
             DEBUG(d, tmp);

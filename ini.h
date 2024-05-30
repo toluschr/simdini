@@ -22,7 +22,6 @@ struct ini_ctx {
 
     ini_callback_t callback;
     void *user;
-    __m256i t0;
 };
 
 bool ini_parse_string(const char *s, size_t l, ini_callback_t callback, void *user);
