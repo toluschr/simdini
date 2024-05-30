@@ -69,11 +69,11 @@ static struct ini_test ini_space_at_beginning_of_line = {
     }
 };
 
-static struct ini_test ini_section_at_32byte_offset = {
-    "                               [a]\nb=c\n",
+static struct ini_test ini_section_at_32byte_boundary = {
+    "                               [aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]\nb=c\n",
     true,
     {
-        {"a", "b", "c"},
+        {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "b", "c"},
         {NULL, NULL, NULL}
     }
 };
@@ -148,6 +148,33 @@ static struct ini_test ini_empty_section_name = {
     }
 };
 
+static struct ini_test ini_overlong_names = {
+    "[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    true,
+    {
+        {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        {NULL, NULL, NULL},
+    }
+};
+
+static struct ini_test ini_key_at_32byte_boundary = {
+    "[]\n                             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=b",
+    true,
+    {
+        {"", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "b"},
+        {NULL, NULL, NULL}
+    }
+};
+
+static struct ini_test ini_value_at_32byte_boundary = {
+    "[]\na=                           bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    true,
+    {
+        {"", "a", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+        {NULL, NULL, NULL}
+    }
+};
+
 typedef struct {
     const char *name;
     struct ini_test *test;
@@ -162,7 +189,7 @@ ini_testsuite all_tests = {
     TEST(ini_no_newline_at_eof),
     TEST(ini_newline_at_eof),
     TEST(ini_space_at_beginning_of_line),
-    TEST(ini_section_at_32byte_offset),
+    TEST(ini_section_at_32byte_boundary),
     TEST(ini_empty_section),
     TEST(ini_hashtag_in_value),
     TEST(ini_hashtag_after_section),
@@ -171,6 +198,9 @@ ini_testsuite all_tests = {
     TEST(ini_empty_value_no_newline_at_eof),
     TEST(ini_empty_key),
     TEST(ini_empty_section_name),
+    TEST(ini_overlong_names),
+    TEST(ini_key_at_32byte_boundary),
+    TEST(ini_value_at_32byte_boundary),
     {NULL, NULL},
 };
 
