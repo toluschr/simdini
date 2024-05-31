@@ -290,6 +290,7 @@ static void ini_do(struct ini_ctx *ctx)
             at = __builtin_ctz(mask_line_feed);
             mask_non_space &= ~((2 << at) - 1);
             mask_line_feed &= mask_non_space;
+            mask_equal &= mask_non_space;
             goto _ini_state_begin_line;
         }
     }
