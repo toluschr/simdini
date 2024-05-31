@@ -37,6 +37,14 @@ struct ini_ctx {
     void *user;
 };
 
-bool ini_parse_string(const char *s, size_t l, ini_callback_t callback, void *user);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern bool ini_parse_string(const char *s, size_t l, ini_callback_t callback, void *user);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // _INI_H_
