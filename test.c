@@ -185,6 +185,15 @@ static struct ini_test ini_spaces_after_last_value_no_newline_at_eof = {
     }
 };
 
+static struct ini_test ini_punctuator_in_comment = {
+    "[a]\n#=[]\nb=c\n",
+    true,
+    {
+        {"a", "b", "c"},
+        {NULL, NULL, NULL}
+    }
+};
+
 typedef struct {
     const char *name;
     struct ini_test *test;
@@ -212,6 +221,7 @@ ini_testsuite all_tests = {
     TEST(ini_key_at_32byte_boundary),
     TEST(ini_value_at_32byte_boundary),
     TEST(ini_spaces_after_last_value_no_newline_at_eof),
+    TEST(ini_punctuator_in_comment),
     {NULL, NULL},
 };
 
@@ -275,17 +285,17 @@ static int check_callback(const char *s, size_t sl, const char *k, size_t kl, co
     size_t evl = strlen(ev);
 
     if (!(esl == sl && memcmp(s, es, esl) == 0)) {
-        debug_printline("Section invalid: '%.*s' != '%.*s'", (int)sl, s, (int)esl, s);
+        debug_printline("Section invalid: '%.*s' != '%.*s'", (int)sl, s, (int)esl, es);
         ok = false;
     }
 
     if (!(ekl == kl && memcmp(k, ek, ekl) == 0)) {
-        debug_printline("Key invalid: '%.*s' != '%.*s'", (int)kl, k, (int)ekl, k);
+        debug_printline("Key invalid: '%.*s' != '%.*s'", (int)kl, k, (int)ekl, ek);
         ok = false;
     }
 
     if (!(evl == vl && memcmp(v, ev, evl) == 0)) {
-        debug_printline("Value invalid: '%.*s' != '%.*s'", (int)vl, v, (int)evl, v);
+        debug_printline("Value invalid: '%.*s' != '%.*s'", (int)vl, v, (int)evl, ev);
         ok = false;
     }
 
