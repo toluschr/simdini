@@ -186,10 +186,32 @@ static struct ini_test ini_spaces_after_last_value_no_newline_at_eof = {
 };
 
 static struct ini_test ini_punctuator_in_comment = {
-    "[a]\n#=[]\nb=c\n",
+    "[a]\n#[]=\nb=c\n",
     true,
     {
         {"a", "b", "c"},
+        {NULL, NULL, NULL}
+    }
+};
+
+static struct ini_test ini_punctuator_in_value = {
+    "[a] b = c=[]\n"
+    "[d] e = f][=\n",
+    true,
+    {
+        {"a", "b", "c=[]"},
+        {"d", "e", "f][="},
+        {NULL, NULL, NULL}
+    }
+};
+
+static struct ini_test ini_punctuator_in_key = {
+    "[a] b[] = c\n"
+    "[d] e][ = f\n",
+    true,
+    {
+        {"a", "b[]", "c"},
+        {"d", "e][", "f"},
         {NULL, NULL, NULL}
     }
 };
@@ -222,6 +244,8 @@ ini_testsuite all_tests = {
     TEST(ini_value_at_32byte_boundary),
     TEST(ini_spaces_after_last_value_no_newline_at_eof),
     TEST(ini_punctuator_in_comment),
+    TEST(ini_punctuator_in_value),
+    TEST(ini_punctuator_in_key),
     {NULL, NULL},
 };
 

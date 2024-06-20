@@ -278,6 +278,8 @@ static void ini_do(struct ini_ctx *ctx)
             at = __builtin_ctz(mask_line_feed);
             mask_non_space &= ~((2 << at) - 1);
             mask_line_feed &= mask_non_space;
+            mask_equal &= mask_non_space;
+            mask_rsb &= mask_non_space;
             goto _ini_state_begin_line;
         _ini_state_in_comment: ctx->state = ini_state_in_comment; fallthrough;
         case ini_state_in_comment:
@@ -291,6 +293,7 @@ static void ini_do(struct ini_ctx *ctx)
             mask_non_space &= ~((2 << at) - 1);
             mask_line_feed &= mask_non_space;
             mask_equal &= mask_non_space;
+            mask_rsb &= mask_non_space;
             goto _ini_state_begin_line;
         }
     }
