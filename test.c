@@ -325,13 +325,13 @@ static int check_callback(const char *s, size_t sl, const char *k, size_t kl, co
 
 
     (*expect)++;
-    return 1;
+    return 0;
 }
 
 static int print_callback(const char *s, size_t sl, const char *k, size_t kl, const char *v, size_t vl, void *user) {
     (void)(user);
 
-    return 1;
+    return 0;
     printf("[%.*s] %.*s = %.*s\n", (int)sl, s, (int)kl, k, (int)vl, v);
 }
 

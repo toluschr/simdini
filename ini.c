@@ -273,7 +273,7 @@ static void ini_do(struct ini_ctx *ctx)
 
             if (mask_line_feed == 0) continue;
 
-            ctx->callback(ctx->sb, ctx->se - ctx->sb, ctx->kb, ctx->ke - ctx->kb, ctx->vb, ctx->ve - ctx->vb, ctx->user);
+            if (ctx->callback(ctx->sb, ctx->se - ctx->sb, ctx->kb, ctx->ke - ctx->kb, ctx->vb, ctx->ve - ctx->vb, ctx->user) != 0) return;
 
             at = __builtin_ctz(mask_line_feed);
             mask_non_space &= ~((2 << at) - 1);
@@ -319,11 +319,9 @@ bool ini_parse_string(const char *s, size_t l, ini_callback_t callback, void *us
 
     switch (ctx.state) {
     case ini_state_begin_value:
-        ctx.callback(ctx.sb, ctx.se - ctx.sb, ctx.kb, ctx.ke - ctx.kb, "", 0, ctx.user);
-        return true;
+        return !ctx.callback(ctx.sb, ctx.se - ctx.sb, ctx.kb, ctx.ke - ctx.kb, "", 0, ctx.user);
     case ini_state_in_value:
-        ctx.callback(ctx.sb, ctx.se - ctx.sb, ctx.kb, ctx.ke - ctx.kb, ctx.vb, ctx.ve - ctx.vb, ctx.user);
-        return true;
+        return !ctx.callback(ctx.sb, ctx.se - ctx.sb, ctx.kb, ctx.ke - ctx.kb, ctx.vb, ctx.ve - ctx.vb, ctx.user);
     case ini_state_begin_line:
         return true;
     default:
