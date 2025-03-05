@@ -189,6 +189,7 @@ static void ini_do(struct simdini *ctx)
             case '\n':
                 mask_non_space &= ~((2 << at) - 1);
                 mask_line_feed &= mask_non_space;
+                ctx->line++;
                 goto _ini_state_begin_line;
             case '#':
                 mask_non_space &= ~((2 << at) - 1);
@@ -303,6 +304,7 @@ bool ini_init(struct simdini *ctx, ini_callback_t callback, void *user)
 {
     ctx->state = ini_state_begin_line;
     ctx->callback = callback;
+    ctx->line = 0;
     ctx->sb = NULL;
     ctx->se = NULL;
     ctx->kb = NULL;

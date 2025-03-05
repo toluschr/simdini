@@ -21,6 +21,7 @@ struct simdini {
     } state;
 
     ini_callback_t callback;
+    size_t line;
 
     const char *sb;
     const char *se;
