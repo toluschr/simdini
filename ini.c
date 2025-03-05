@@ -139,7 +139,7 @@ static __m256i ini_load(const char *ptr, uint64_t len)
     return out;
 }
 
-static void ini_do(struct ini_ctx *ctx)
+static void ini_do(struct simdini *ctx)
 {
     __m256i space = _mm256_set1_epi8(' ');
     __m256i line_feed = _mm256_set1_epi8('\n');
@@ -299,32 +299,45 @@ static void ini_do(struct ini_ctx *ctx)
     }
 }
 
-bool ini_parse_string(const char *s, size_t l, ini_callback_t callback, void *user)
+bool ini_init(struct simdini *ctx, ini_callback_t callback, void *user)
 {
-    struct ini_ctx ctx;
-    ctx.state = ini_state_begin_line;
-    ctx.callback = callback;
-    ctx.sb = NULL;
-    ctx.se = NULL;
-    ctx.kb = NULL;
-    ctx.ke = NULL;
-    ctx.vb = NULL;
-    ctx.ve = NULL;
-    ctx.user = user;
-    ctx.ptr = s;
-    ctx.len = l;
+    ctx->state = ini_state_begin_line;
+    ctx->callback = callback;
+    ctx->sb = NULL;
+    ctx->se = NULL;
+    ctx->kb = NULL;
+    ctx->ke = NULL;
+    ctx->vb = NULL;
+    ctx->ve = NULL;
+    ctx->user = user;
+    return true;
+}
 
-    ini_do(&ctx);
-    if (ctx.len != 0) return false;
+bool ini_push(struct simdini *ctx, const char *s, size_t l)
+{
+    ctx->ptr = s;
+    ctx->len = l;
 
-    switch (ctx.state) {
+    ini_do(ctx);
+    return (ctx->len == 0);
+}
+
+extern bool ini_stop(struct simdini *ctx)
+{
+    switch (ctx->state) {
     case ini_state_begin_value:
-        return !ctx.callback(ctx.sb, ctx.se - ctx.sb, ctx.kb, ctx.ke - ctx.kb, "", 0, ctx.user);
+        return !ctx->callback(ctx->sb, ctx->se - ctx->sb, ctx->kb, ctx->ke - ctx->kb, "", 0, ctx->user);
     case ini_state_in_value:
-        return !ctx.callback(ctx.sb, ctx.se - ctx.sb, ctx.kb, ctx.ke - ctx.kb, ctx.vb, ctx.ve - ctx.vb, ctx.user);
+        return !ctx->callback(ctx->sb, ctx->se - ctx->sb, ctx->kb, ctx->ke - ctx->kb, ctx->vb, ctx->ve - ctx->vb, ctx->user);
     case ini_state_begin_line:
         return true;
     default:
         return false;
     }
+}
+
+bool ini_parse_string(const char *s, size_t l, ini_callback_t callback, void *user)
+{
+    struct simdini ctx;
+    return (ini_init(&ctx, callback, user) && ini_push(&ctx, s, l) && ini_stop(&ctx));
 }
