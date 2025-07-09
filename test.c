@@ -216,6 +216,18 @@ static struct ini_test ini_punctuator_in_key = {
     }
 };
 
+static struct ini_test ini_oriedita_possible_bug = {
+    "[oriedita]\n"
+    "url = https://github.com/oriedita/oriedita/releases/download/v1.1.3/oriedita_1.1.3_amd64.deb\n"
+    "last_modified = 1738741402\n\n",
+    .parse_return_value = true,
+    {
+        {"oriedita", "url", "https://github.com/oriedita/oriedita/releases/download/v1.1.3/oriedita_1.1.3_amd64.deb"},
+        {"oriedita", "last_modified", "1738741402"},
+        {NULL, NULL, NULL}
+    }
+};
+
 typedef struct {
     const char *name;
     struct ini_test *test;
@@ -246,6 +258,7 @@ ini_testsuite all_tests = {
     TEST(ini_punctuator_in_comment),
     TEST(ini_punctuator_in_value),
     TEST(ini_punctuator_in_key),
+    TEST(ini_oriedita_possible_bug),
     {NULL, NULL},
 };
 
