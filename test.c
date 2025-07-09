@@ -15,13 +15,13 @@
 
 struct ini_test {
     const char *string;
-    int rc;
+    int parse_return_value;
     const char *(expect[])[3];
 };
 
 static struct ini_test empty = {
     "",
-    true,
+    .parse_return_value = true,
     {
         {NULL, NULL, NULL}
     }
@@ -29,7 +29,7 @@ static struct ini_test empty = {
 
 static struct ini_test empty_section_name_only = {
     "[]",
-    true,
+    .parse_return_value = true,
     {
         {NULL, NULL, NULL}
     }
@@ -37,7 +37,7 @@ static struct ini_test empty_section_name_only = {
 
 static struct ini_test section_name_only = {
     "[a]",
-    true,
+    .parse_return_value = true,
     {
         {NULL, NULL, NULL}
     }
@@ -45,7 +45,7 @@ static struct ini_test section_name_only = {
 
 static struct ini_test ini_no_newline_at_eof = {
     "[a]\nb=c",
-    true,
+    .parse_return_value = true,
     {
         {"a", "b", "c"},
         {NULL, NULL, NULL}
@@ -54,7 +54,7 @@ static struct ini_test ini_no_newline_at_eof = {
 
 static struct ini_test ini_newline_at_eof = {
     "[a]\nb=c\n",
-    true,
+    .parse_return_value = true,
     {
         {"a", "b", "c"},
         {NULL, NULL, NULL}
@@ -63,7 +63,7 @@ static struct ini_test ini_newline_at_eof = {
 
 static struct ini_test ini_space_at_beginning_of_line = {
     " [a]\nb=c\n",
-    true,
+    .parse_return_value = true,
     {
         {"a", "b", "c"},
         {NULL, NULL, NULL}
@@ -72,7 +72,7 @@ static struct ini_test ini_space_at_beginning_of_line = {
 
 static struct ini_test ini_section_at_32byte_boundary = {
     "                               [aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]\nb=c\n",
-    true,
+    .parse_return_value = true,
     {
         {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "b", "c"},
         {NULL, NULL, NULL}
@@ -81,7 +81,7 @@ static struct ini_test ini_section_at_32byte_boundary = {
 
 static struct ini_test ini_empty_section = {
     "[a]\n\n\n[b]\nc=d\n",
-    true,
+    .parse_return_value = true,
     {
         {"b", "c", "d"},
         {NULL, NULL, NULL}
@@ -90,7 +90,7 @@ static struct ini_test ini_empty_section = {
 
 static struct ini_test ini_hashtag_in_value = {
     "[a]\n\n\n[b]\nc=#d\n",
-    true,
+    .parse_return_value = true,
     {
         {"b", "c", "#d"},
         {NULL, NULL, NULL}
@@ -99,7 +99,7 @@ static struct ini_test ini_hashtag_in_value = {
 
 static struct ini_test ini_hashtag_after_section = {
     "[a]#\n[b]\nc=#d\n",
-    true,
+    .parse_return_value = true,
     {
         {"b", "c", "#d"},
         {NULL, NULL, NULL}
@@ -108,7 +108,7 @@ static struct ini_test ini_hashtag_after_section = {
 
 static struct ini_test ini_unterminated_section = {
     "[a",
-    false,
+    .parse_return_value = false,
     {
         {NULL, NULL, NULL}
     }
@@ -116,7 +116,7 @@ static struct ini_test ini_unterminated_section = {
 
 static struct ini_test ini_empty_value = {
     "[a]\nb=\n",
-    true,
+    .parse_return_value = true,
     {
         {"a", "b", ""},
         {NULL, NULL, NULL}
@@ -125,7 +125,7 @@ static struct ini_test ini_empty_value = {
 
 static struct ini_test ini_empty_value_no_newline_at_eof = {
     "[a]\nb=",
-    true,
+    .parse_return_value = true,
     {
         {"a", "b", ""},
         {NULL, NULL, NULL}
@@ -134,7 +134,7 @@ static struct ini_test ini_empty_value_no_newline_at_eof = {
 
 static struct ini_test ini_empty_key = {
     "[a]\n=b",
-    false,
+    .parse_return_value = false,
     {
         {NULL, NULL, NULL}
     }
@@ -142,7 +142,7 @@ static struct ini_test ini_empty_key = {
 
 static struct ini_test ini_empty_section_name = {
     "[]\na=b",
-    true,
+    .parse_return_value = true,
     {
         {"", "a", "b"},
         {NULL, NULL, NULL}
@@ -151,7 +151,7 @@ static struct ini_test ini_empty_section_name = {
 
 static struct ini_test ini_overlong_names = {
     "[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    true,
+    .parse_return_value = true,
     {
         {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
         {NULL, NULL, NULL},
@@ -160,7 +160,7 @@ static struct ini_test ini_overlong_names = {
 
 static struct ini_test ini_key_at_32byte_boundary = {
     "[]\n                             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=b",
-    true,
+    .parse_return_value = true,
     {
         {"", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "b"},
         {NULL, NULL, NULL}
@@ -169,7 +169,7 @@ static struct ini_test ini_key_at_32byte_boundary = {
 
 static struct ini_test ini_value_at_32byte_boundary = {
     "[]\na=                           bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    true,
+    .parse_return_value = true,
     {
         {"", "a", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
         {NULL, NULL, NULL}
@@ -178,7 +178,7 @@ static struct ini_test ini_value_at_32byte_boundary = {
 
 static struct ini_test ini_spaces_after_last_value_no_newline_at_eof = {
     "[]\na=b    ",
-    true,
+    .parse_return_value = true,
     {
         {"", "a", "b"},
         {NULL, NULL, NULL}
@@ -187,7 +187,7 @@ static struct ini_test ini_spaces_after_last_value_no_newline_at_eof = {
 
 static struct ini_test ini_punctuator_in_comment = {
     "[a]\n#[]=\nb=c\n",
-    true,
+    .parse_return_value = true,
     {
         {"a", "b", "c"},
         {NULL, NULL, NULL}
@@ -197,7 +197,7 @@ static struct ini_test ini_punctuator_in_comment = {
 static struct ini_test ini_punctuator_in_value = {
     "[a] b = c=[]\n"
     "[d] e = f][=\n",
-    true,
+    .parse_return_value = true,
     {
         {"a", "b", "c=[]"},
         {"d", "e", "f][="},
@@ -208,7 +208,7 @@ static struct ini_test ini_punctuator_in_value = {
 static struct ini_test ini_punctuator_in_key = {
     "[a] b[] = c\n"
     "[d] e][ = f\n",
-    true,
+    .parse_return_value = true,
     {
         {"a", "b[]", "c"},
         {"d", "e][", "f"},
@@ -350,7 +350,7 @@ int main(int argc, char **argv)
 
             fprintf(stderr, "  %s\n", all_tests[i].name);
             const char *(*check_data)[3] = all_tests[i].test->expect;
-            if (ini_parse_string(all_tests[i].test->string, strlen(all_tests[i].test->string), &check_callback, &check_data) != all_tests[i].test->rc) {
+            if (ini_parse_string(all_tests[i].test->string, strlen(all_tests[i].test->string), &check_callback, &check_data) != all_tests[i].test->parse_return_value) {
                 ok = false;
                 debug_printline("Unexpected return value");
             }
