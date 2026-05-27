@@ -332,6 +332,7 @@ extern bool ini_stop(struct simdini *ctx)
     case ini_state_in_value:
         return !ctx->callback(ctx->sb, ctx->se - ctx->sb, ctx->kb, ctx->ke - ctx->kb, ctx->vb, ctx->ve - ctx->vb, ctx->user);
     case ini_state_begin_line:
+    case ini_state_in_comment:
         return true;
     default:
         return false;
